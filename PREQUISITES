@@ -1,3 +1,4 @@
 PREQUISITES
 
-libgpiod-dev
+  sudo apt-get install libgpiod-dev
+  sudo apt-get install libevdev-dev
