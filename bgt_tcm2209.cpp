@@ -18,29 +18,46 @@ static const int MICROSTEP_SETTING = 8; //8x microsteps.
 #define STEPS_PER_DEGREE 256
 
 
+struct pins {
+    int en;
+    int dir;
+    int step;
+};
+
+struct pins get_stepper_pinout(int nStepper) {
+    if (nStepper == 0) {
+        return {TCM2209_PIN_EN, TCM2209_PIN_DIR,TCM2209_PIN_STEP };
+    } else {
+        //TODO
+        return {TCM2209_PIN_EN, TCM2209_PIN_DIR,TCM2209_PIN_STEP };
+    }
+}
+
 int tcm2209_init(struct tcm2209_handle* handle)
 {
     const char* chipname = TCM2209_CHIP_NAME;
-
+    // TODO get other pinout.
+    struct pins pins = get_stepper_pinout(handle->nStep);
+    int rc = 0;
     handle->pins.chip = gpiod_chip_open(chipname);
     if (!handle->pins.chip) {
         fprintf(stderr, "Failed to open chip\n");
         return 1;
     }
 
-    handle->pins.enb = gpiod_chip_get_line(handle->pins.chip, TCM2209_PIN_EN);
+    handle->pins.enb = gpiod_chip_get_line(handle->pins.chip, pins.en);
     if (!handle->pins.enb) {
         fprintf(stderr, "Failed to get enb pin\n");
         return 1;
     }
 
     // active low.
-    if (gpiod_line_request_output(handle->pins.enb, "tcm2209-enb", 1)) {
-        fprintf(stderr, "Failed to set output 1");
+    if ((rc = gpiod_line_request_output(handle->pins.enb, "tcm2209-enb", 1))) {
+        fprintf(stderr, "Failed to set output 1, rc:%d", rc);
         return 1;
     }
 
-    handle->pins.dir = gpiod_chip_get_line(handle->pins.chip, TCM2209_PIN_DIR);
+    handle->pins.dir = gpiod_chip_get_line(handle->pins.chip, pins.dir);
     if (!handle->pins.dir) {
         fprintf(stderr, "Failed to get dir pin\n");
         return 1;
@@ -51,7 +68,7 @@ int tcm2209_init(struct tcm2209_handle* handle)
         return 1;
     }
 
-    handle->pins.step = gpiod_chip_get_line(handle->pins.chip, TCM2209_PIN_STEP);
+    handle->pins.step = gpiod_chip_get_line(handle->pins.chip, pins.step);
     if (!handle->pins.step) {
         fprintf(stderr, "Failed to get step pin\n");
         return 1;

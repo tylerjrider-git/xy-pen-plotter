@@ -2,16 +2,14 @@
 #define BGT_TCM2209
 
 #include <stdbool.h>
+#include <gpiod.h>
 
-#define TCM2209_MAX_SPEED 50.0
+#define TCM2209_MAX_SPEED 5.0
 #define TCM2209_STEP_TMIN_NS (100)
 
-#define CW false
-#define CCW true
+constexpr bool CCW = true;
+constexpr bool CW = false;
 
-
-struct gpiod_chip;
-struct gpiod_line;
 struct tcm2209_pins {
     struct gpiod_chip* chip;
     struct gpiod_line* enb;
