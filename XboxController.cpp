@@ -3,9 +3,11 @@
 #include <unistd.h>
 #include <cstring>
 
-
 XboxController::XboxController(const std::string& devicePath) :
+    mPrevX{0,0},
+    mPrevY{0,0},
     mDevicePath(devicePath)
+
 {
     mFd = ::open(mDevicePath.c_str(), O_RDONLY | O_NONBLOCK);
     if (mFd < 0) {
@@ -50,31 +52,35 @@ static void printEvent(input_event& ev)
     }
 }
 
-void XboxController::startEventThread()
+void XboxController::startEventThread(const bool blocking)
 {
-    mEventThread = std::thread( [this] (){
+    mEventThread = std::thread( [this, blocking] (){
         input_event ev;
+        unsigned int flags = LIBEVDEV_READ_FLAG_NORMAL;
+        if (blocking) flags |= LIBEVDEV_READ_FLAG_BLOCKING;
+
         while (mRunning) {
-            int rc = ::libevdev_next_event(mDevice, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+            int rc = ::libevdev_next_event(mDevice, flags, &ev);
             if (rc == 0) {
-                printEvent(ev);
+                if (0) { printEvent(ev); }
                 std::lock_guard<std::mutex> lg(mEventLocker);
                 switch(ev.type) {
                     case EV_KEY:
                     // Only process released
-                    if (ev.value == false) {
+                    if (ev.value == 0) {
                         mEventQueue.emplace_back(XboxEvent::Button, ev.code, 0, 0);
                     }
                         break;
                     case EV_ABS:
                     {
-                        const bool isX = ev.code == ABS_X || ev.code == ABS_RX;
-                        if (ev.code == ABS_X || ev.code == ABS_Y) {
-                            mEventQueue.emplace_back(XboxEvent::LeftAxis, 0,
-                                    isX ? ev.value : -1, isX ? -1 : ev.value);
-                        } else if (ev.code == ABS_RX || ev.code == ABS_RY) {
-                            mEventQueue.emplace_back(XboxEvent::RightAxis, 0,
-                                isX ? ev.value : -1, isX ? -1 : ev.value);
+                        const int axis = (ev.code == ABS_X || ev.code == ABS_Y) ? XboxEvent::LeftAxis : XboxEvent::RightAxis;
+                        const bool isX = (ev.code == ABS_X || ev.code == ABS_RX);
+                        if (isX) {
+                            mEventQueue.emplace_back(axis, 0, ev.value, mPrevY[axis]);
+                            mPrevX[axis] = ev.value;
+                        } else {
+                            mEventQueue.emplace_back(axis, 0, mPrevX[axis], ev.value);
+                            mPrevY[axis] = ev.value;   
                         }
                     }
                         break;
@@ -88,7 +94,7 @@ void XboxController::startEventThread()
                 std::fprintf(stderr, "Failed to read event rc=%d(%s)\n", rc, strerror(rc));
                 break; // error or device unplugged
             }
-            usleep(5000); // small sleep to avoid busy-wait
+            usleep(1000); // small sleep to avoid busy-wait
         }
     });
 }

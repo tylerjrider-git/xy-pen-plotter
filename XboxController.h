@@ -41,25 +41,40 @@ __attribute__((weak)) int libevdev_next_event(libevdev*, int, input_event*) { re
 
 #endif
 
+enum class XboxButton {
+    A = BTN_SOUTH,
+    B = BTN_EAST,
+    X = BTN_WEST,
+    Y = BTN_NORTH
+};
+
 struct XboxEvent {
-    XboxEvent(int t, int b, float x, float y) { type = t; button = b; xpos = x; ypos = y; }
+    XboxEvent(int t, int b, float x, float y)
+    {
+        type = t;
+        button = (XboxButton) b;
+        xpos = x;
+        ypos = y;
+    }
     enum {
         Button,
         LeftAxis,
         RightAxis
     };
+
     int type;
-    int button;
+    XboxButton button;
     float xpos;
     float ypos;
 };
+
 
 class XboxController {
 public:
     XboxController(const std::string& devicePath);
     virtual ~XboxController();
 
-    void startEventThread();
+    void startEventThread(const bool blocking=false);
     std::optional<XboxEvent> getNextEvent();
 
 private:
@@ -68,6 +83,9 @@ private:
     std::deque<XboxEvent> mEventQueue;
     std::mutex mEventLocker;
 
+    // Prev value from each axis.
+    int mPrevX[2];
+    int mPrevY[2];
     // EvDev device information
     const std::string& mDevicePath;
     libevdev* mDevice = nullptr;

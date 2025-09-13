@@ -3,23 +3,22 @@ CFLAGS += $(shell pkg-config --cflags libevdev)
 LDFLAGS += $(shell pkg-config --libs libevdev libgpiod)
 CC := g++
 
-
 default: stepper dual_stepper xbox
 
-stepper: bgt_tmc2209.cpp bgt_tmc2209.h main.cpp
-	$(CC) $(CFLAGS) bgt_tmc2209.cpp main.cpp -o stepper $(LDFLAGS)
+stepper: bgt_tmc2209.cpp main.cpp
+	$(CC) $(CFLAGS) $^ -o $@ -o stepper $(LDFLAGS)
 
-dual_stepper: StepperController.cpp bgt_tmc2209.cpp main.cpp
+dual_stepper: StepperController.cpp XboxController.cpp bgt_tmc2209.cpp dual_stepper.cpp 
 	$(CC) $(CFLAGS)  $^ -o $@ $(LDFLAGS)
 
 libgpiod.so: libgpiod_stub.c
 	$(CC) $(CFLAGS) -fPIC -shared -o libgpiod.so libgpiod_stub.c $(LDFLAGS)
 
 xbox_dummy: XboxController.cpp
-	$(CC) $(CFLAGS) -DMOCK_EVDEV XboxController.cpp -o xbox $(LDFLAGS)
+	$(CC) $(CFLAGS) -DMOCK_EVDEV $^ -o $@ $(LDFLAGS)
 
 xbox: XboxController.cpp
-	$(CC) $(CFLAGS) XboxController.cpp -o xbox $(LDFLAGS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: clean
 clean:

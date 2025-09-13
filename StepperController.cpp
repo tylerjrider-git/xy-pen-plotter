@@ -7,6 +7,7 @@ using namespace std::chrono_literals;
 StepperController::StepperController(int stepper_n):
     nStepper(stepper_n)
 {
+    mTargetSpeed.store(0);
     mControllerHandle = (struct tmc2209_handle*)::malloc(sizeof(struct tmc2209_handle));
     mControllerHandle->nStep = stepper_n; // TODO map to correct impl
     int rc = tmc2209_init(mControllerHandle);
@@ -28,6 +29,18 @@ StepperController::StepperController(int stepper_n):
                         cmd.duration = cmd.duration - 1;// TODO.
                         std::printf("%d duration : %lf\n", nStepper, cmd.duration);
                     }
+                mTargetSpeed.store(0); // clear targets.
+                } else if (mTargetSpeed > TMC2209_MIN_SPEED) {
+                    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - mlastUpdateTp);
+                    step(mTargetSpeed, mTargetDirection, 1);
+                    if (duration.count() > 2000) {
+                        mTargetSpeed.store(0);
+                        printf("Stopping auto run\n");
+                    }
+                    continue;
+                } else {
+                    mTargetSpeed.store(0);
                 }
             }
             std::this_thread::sleep_for(100ms);
@@ -50,16 +63,24 @@ void StepperController::sendCommand(struct StepperCommand cmd)
     mCommandQueue.push_back(cmd);
 }
 
-void StepperController::step(double speed, bool direction)
+void StepperController::setTarget(float speed, bool dir)
 {
-    std::printf("%d: Stepping at %lf dir: %d\n", nStepper, speed, direction);
+    mlastUpdateTp = std::chrono::steady_clock::now();
+    mTargetSpeed.store(speed);
+    mTargetDirection.store(dir);
+}
+
+void StepperController::step(double speed, bool direction, int angle)
+{
+    speed = safeSpeed(speed);
+    std::fprintf(stderr, "%d: Stepping at %lf dir: %d\n", nStepper, speed, direction);
     // TODO
     // * Add limit switches before issuing command.
     // * Perhaps run PID here as well.
     // DO Step.
     tmc2209_enable(mControllerHandle, true);
     tmc2209_setdir(mControllerHandle, direction);
-    tmc2209_angle_step(mControllerHandle, 360, speed);
+    tmc2209_angle_step(mControllerHandle, angle, speed);
     tmc2209_enable(mControllerHandle, false);
 }
 
@@ -67,6 +88,4 @@ double StepperController::safeSpeed(double d)
 {
     return std::clamp(0.0, TMC2209_MAX_SPEED, d);
 }
-
-
 

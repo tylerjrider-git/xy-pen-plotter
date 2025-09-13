@@ -20,7 +20,8 @@ public:
     virtual ~StepperController();
 
     void sendCommand(struct StepperCommand cmd);
-    void step(double speed, bool direction);
+    void setTarget(float speed, bool dir);
+    void step(double speed, bool direction, int angle=360);
 
 private:
     double safeSpeed(double in); // TODO add in mechanical configuration
@@ -33,4 +34,8 @@ private:
 
     std::mutex mCommandQueueMutex;
     std::deque<struct StepperCommand> mCommandQueue;
+
+    std::atomic<float> mTargetSpeed;
+    std::atomic<bool> mTargetDirection;
+    std::chrono::time_point<std::chrono::steady_clock> mlastUpdateTp;
 };

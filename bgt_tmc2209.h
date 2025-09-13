@@ -4,7 +4,8 @@
 #include <stdbool.h>
 #include <gpiod.h>
 
-#define TMC2209_MAX_SPEED 5.0
+#define TMC2209_MAX_SPEED 7.0
+#define TMC2209_MIN_SPEED 0.01
 #define TMC2209_STEP_TMIN_NS (100)
 
 constexpr bool CCW = true;
