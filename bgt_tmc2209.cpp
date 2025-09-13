@@ -4,19 +4,18 @@
 #include <string.h>
 #include <unistd.h> // sleep
 
-// TCM PINOUTS, platform specific.
-#define tmc2209_CHIP_NAME "/dev/gpiochip0"
-#define tmc2209_PIN_EN 4
-#define tmc2209_PIN_DIR 27
-#define tmc2209_PIN_STEP 17
 
+
+static const float PI = 3.14159;
+static const int STEPS_PER_DEGREE = 256;
 static const int MICROSTEP_SETTING = 8; //8x microsteps.
 
-#define PI 3.14159
 
-// STEPPER CONFIG
-#define STEPS_PER_DEGREE 256
-
+// TCM PINOUTS, platform specific.
+#define TMC2209_CHIP_NAME "/dev/gpiochip0"
+#define TMC2209_PIN_EN 4
+#define TMC2209_PIN_DIR 27
+#define TMC2209_PIN_STEP 17
 
 struct pins {
     int en;
@@ -24,21 +23,48 @@ struct pins {
     int step;
 };
 
-struct pins get_stepper_pinout(int nStepper) {
-    if (nStepper == 0) {
-        return {tmc2209_PIN_EN, tmc2209_PIN_DIR,tmc2209_PIN_STEP };
+struct pins get_stepper_pinout(int n) {
+    if (n == 0) {
+        return {TMC2209_PIN_EN, TMC2209_PIN_DIR,TMC2209_PIN_STEP };
     } else {
         //TODO
-        return {tmc2209_PIN_EN, tmc2209_PIN_DIR,tmc2209_PIN_STEP };
+        return {TMC2209_PIN_EN, TMC2209_PIN_DIR,TMC2209_PIN_STEP };
     }
 }
 
-int tmc2209_init(struct tmc2209_handle* handle)
+struct tmc2209_pins {
+    struct gpiod_chip* chip;
+    struct gpiod_line* enb;
+    struct gpiod_line* dir;
+    struct gpiod_line* step;
+};
+struct tmc2209_handle {
+    int nStep;
+    struct tmc2209_pins pins;
+};
+
+struct tmc2209_handle* tmc2209_create(void)
 {
-    const char* chipname = tmc2209_CHIP_NAME;
-    // TODO get other pinout.
-    struct pins pins = get_stepper_pinout(handle->nStep);
+    return (struct tmc2209_handle*) ::malloc(sizeof(struct tmc2209_handle));
+}
+
+void tmc2209_destroy(struct tmc2209_handle** handle)
+{
+    if (handle) {
+        free(*handle);
+        *handle = NULL;
+    }
+}
+
+int tmc2209_init(struct tmc2209_handle* handle, int n_stepper)
+{
+    const char* chipname = TMC2209_CHIP_NAME;
+    struct pins pins = {0};
     int rc = 0;
+
+    pins = get_stepper_pinout(handle->nStep);
+
+    handle->nStep = n_stepper;
     handle->pins.chip = gpiod_chip_open(chipname);
     if (!handle->pins.chip) {
         fprintf(stderr, "Failed to open chip\n");
@@ -53,7 +79,7 @@ int tmc2209_init(struct tmc2209_handle* handle)
 
     // active low.
     if ((rc = gpiod_line_request_output(handle->pins.enb, "tmc2209-enb", 1))) {
-        fprintf(stderr, "Failed to set output 1, rc:%d", rc);
+        fprintf(stderr, "Failed to set output, rc:%d", rc);
         return 1;
     }
 

@@ -1,18 +1,21 @@
 #include "StepperController.h"
 #include "bgt_tmc2209.h" // TODO could be different driver "backends"
+
 #include <algorithm> // clamp
+#include <iostream>
 
 using namespace std::chrono_literals;
 
+static constexpr int MAX_TARGET_DURATION_MS = 2000;
+
 StepperController::StepperController(int stepper_n):
-    nStepper(stepper_n)
+    mStepperId(stepper_n),
+    mTargetSpeed{0}
 {
-    mTargetSpeed.store(0);
-    mControllerHandle = (struct tmc2209_handle*)::malloc(sizeof(struct tmc2209_handle));
-    mControllerHandle->nStep = stepper_n; // TODO map to correct impl
-    int rc = tmc2209_init(mControllerHandle);
+    mControllerHandle = tmc2209_create();
+    int rc = tmc2209_init(mControllerHandle, mStepperId);
     if (rc != 0) {
-        std::fprintf(stderr, "Failed to init tcm controller\n");
+        std::cerr <<  "Failed to init TCM controller for id: " << mStepperId << std::endl;
         return; // TODO throw.
     }
 
@@ -24,26 +27,16 @@ StepperController::StepperController(int stepper_n):
                     struct StepperCommand cmd = mCommandQueue.front();
                     mCommandQueue.pop_front();
                     lock.unlock();
-                    while (cmd.duration > 0) {
-                        step(cmd.speed, cmd.direction);
-                        cmd.duration = cmd.duration - 1;// TODO.
-                        std::printf("%d duration : %lf\n", nStepper, cmd.duration);
-                    }
-                mTargetSpeed.store(0); // clear targets.
+                    handleCommand(cmd);
+                    mTargetSpeed.store(0); // Disables target mode.
                 } else if (mTargetSpeed > TMC2209_MIN_SPEED) {
-                    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - mlastUpdateTp);
-                    step(mTargetSpeed, mTargetDirection, 1);
-                    if (duration.count() > 2000) {
-                        mTargetSpeed.store(0);
-                        printf("Stopping auto run\n");
-                    }
-                    continue;
+                    handleTargetCommand();
                 } else {
+                    // No commands or active target, wait. TODO cv.wait(std::unique_lock<mMutex>, [] { !mCommandQueue.empty()})
+                    std::this_thread::sleep_for(100ms);
                     mTargetSpeed.store(0);
                 }
             }
-            std::this_thread::sleep_for(100ms);
         }
     });
 }
@@ -53,8 +46,10 @@ StepperController::~StepperController()
     mRunning = false;
     mWorkerThread.join();
 
-    if (mControllerHandle)
-        ::free(mControllerHandle);
+    if (mControllerHandle) {
+        tmc2209_teardown(mControllerHandle);
+        tmc2209_destroy(&mControllerHandle);
+    }
 }
 
 void StepperController::sendCommand(struct StepperCommand cmd)
@@ -70,22 +65,46 @@ void StepperController::setTarget(float speed, bool dir)
     mTargetDirection.store(dir);
 }
 
-void StepperController::step(double speed, bool direction, int angle)
+unsigned long StepperController::timeSinceLastCommand()
 {
-    speed = safeSpeed(speed);
-    std::fprintf(stderr, "%d: Stepping at %lf dir: %d\n", nStepper, speed, direction);
-    // TODO
-    // * Add limit switches before issuing command.
-    // * Perhaps run PID here as well.
-    // DO Step.
-    tmc2209_enable(mControllerHandle, true);
-    tmc2209_setdir(mControllerHandle, direction);
-    tmc2209_angle_step(mControllerHandle, angle, speed);
-    tmc2209_enable(mControllerHandle, false);
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - mlastUpdateTp).count();
+}
+
+void StepperController::handleTargetCommand()
+{
+    if (timeSinceLastCommand() < MAX_TARGET_DURATION_MS) {
+        step(mTargetSpeed, mTargetDirection, 1);
+    } else {
+        std::cout << "Stopping autotarget" << std::endl;
+        mTargetSpeed.store(0);
+    }
+}
+
+void StepperController::handleCommand(struct StepperCommand& cmd)
+{
+    while (cmd.duration > 0) {
+        step(cmd.speed, cmd.direction);
+        cmd.duration = cmd.duration - 1;// TODO calculate duration based on cmd.
+        std::printf("[%d] duration : %lf\n", mStepperId, cmd.duration);
+    }
 }
 
 double StepperController::safeSpeed(double d)
 {
     return std::clamp(0.0, TMC2209_MAX_SPEED, d);
+}
+
+void StepperController::step(double speed, bool direction, int angle)
+{
+    speed = safeSpeed(speed);
+    std::fprintf(stderr, "%d: Stepping at %lf dir: %d\n", mStepperId, speed, direction);
+    // TODO
+    // * Add limit switches before issuing command.
+    // * Perhaps run PID here as well.
+    tmc2209_enable(mControllerHandle, true);
+    tmc2209_setdir(mControllerHandle, direction);
+    tmc2209_angle_step(mControllerHandle, angle, speed);
+    tmc2209_enable(mControllerHandle, false);
 }
 

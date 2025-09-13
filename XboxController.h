@@ -7,10 +7,8 @@
 #include <optional>
 #include <thread>
 
-
 #ifndef MOCK_EVDEV
 #include <libevdev/libevdev.h>
-
 #else
 #define LIBEVDEV_READ_FLAG_NORMAL 0 
 #define LIBEVDEV_READ_STATUS_SYNC ENOTSUP
@@ -30,8 +28,6 @@ typedef struct {
     int value;
     int code;
 } input_event;
-
-
 
 libevdev dummy;
 __attribute__((weak)) int libevdev_new_from_fd(int, libevdev** dev) { *dev = &dummy ; return 0; }

@@ -8,7 +8,7 @@ default: stepper dual_stepper xbox
 stepper: bgt_tmc2209.cpp main.cpp
 	$(CC) $(CFLAGS) $^ -o $@ -o stepper $(LDFLAGS)
 
-dual_stepper: StepperController.cpp XboxController.cpp bgt_tmc2209.cpp dual_stepper.cpp 
+stepdrive: StepperController.cpp XboxController.cpp bgt_tmc2209.cpp stepdrive.cpp 
 	$(CC) $(CFLAGS)  $^ -o $@ $(LDFLAGS)
 
 libgpiod.so: libgpiod_stub.c

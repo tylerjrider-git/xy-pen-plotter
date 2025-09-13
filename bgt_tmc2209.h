@@ -2,7 +2,6 @@
 #define BGT_TMC2209
 
 #include <stdbool.h>
-#include <gpiod.h>
 
 #define TMC2209_MAX_SPEED 7.0
 #define TMC2209_MIN_SPEED 0.01
@@ -11,19 +10,13 @@
 constexpr bool CCW = true;
 constexpr bool CW = false;
 
-struct tmc2209_pins {
-    struct gpiod_chip* chip;
-    struct gpiod_line* enb;
-    struct gpiod_line* dir;
-    struct gpiod_line* step;
-};
+struct tmc2209_handle;
 
-struct tmc2209_handle {
-    int nStep;
-    struct tmc2209_pins pins;
-};
+struct tmc2209_handle* tmc2209_create();
 
-int tmc2209_init(struct tmc2209_handle* handle);
+void tmc2209_destroy(struct tmc2209_handle** handle);
+
+int tmc2209_init(struct tmc2209_handle* handle, int n_step /* which stepper*/);
 
 void tmc2209_teardown(struct tmc2209_handle* handle);
 

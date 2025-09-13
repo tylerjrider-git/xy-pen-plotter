@@ -27,6 +27,7 @@ XboxController::~XboxController()
 {
     mRunning = false;
     mEventThread.join();
+
     if (mDevice)
         ::libevdev_free(mDevice);
     if (mFd >= 0)
@@ -47,17 +48,18 @@ static void printEvent(input_event& ev)
          }else if (ev.code == ABS_RY) {
             std::cout << "Right Stick Y (" << ev.code  << "): " << ev.value << std::endl;
         }
-    }else {
-        // std::cerr << "Unkonwn code: " << ev.code << std::endl;
+    } else {
+        // std::cerr << "Unknown code: " << ev.code << std::endl;
     }
 }
 
 void XboxController::startEventThread(const bool blocking)
 {
-    mEventThread = std::thread( [this, blocking] (){
+    mEventThread = std::thread([this, blocking] () -> void {
         input_event ev;
         unsigned int flags = LIBEVDEV_READ_FLAG_NORMAL;
-        if (blocking) flags |= LIBEVDEV_READ_FLAG_BLOCKING;
+        // Not sure if this works.
+        // if (blocking) flags |= LIBEVDEV_READ_FLAG_BLOCKING;
 
         while (mRunning) {
             int rc = ::libevdev_next_event(mDevice, flags, &ev);
@@ -66,10 +68,9 @@ void XboxController::startEventThread(const bool blocking)
                 std::lock_guard<std::mutex> lg(mEventLocker);
                 switch(ev.type) {
                     case EV_KEY:
-                    // Only process released
-                    if (ev.value == 0) {
-                        mEventQueue.emplace_back(XboxEvent::Button, ev.code, 0, 0);
-                    }
+                        // Only process released
+                        if (ev.value == 0)
+                            mEventQueue.emplace_back(XboxEvent::Button, ev.code, 0, 0);
                         break;
                     case EV_ABS:
                     {
@@ -82,8 +83,8 @@ void XboxController::startEventThread(const bool blocking)
                             mEventQueue.emplace_back(axis, 0, mPrevX[axis], ev.value);
                             mPrevY[axis] = ev.value;   
                         }
-                    }
                         break;
+                    }
                     default:
                         break;
                 }
@@ -91,8 +92,9 @@ void XboxController::startEventThread(const bool blocking)
             } else if (rc == LIBEVDEV_READ_STATUS_SYNC) {
                 std::fprintf(stderr, "Falling behind processing events\n");
             } else if (rc != -EAGAIN) {
+                // error or device unplugged
                 std::fprintf(stderr, "Failed to read event rc=%d(%s)\n", rc, strerror(rc));
-                break; // error or device unplugged
+                break; 
             }
             usleep(1000); // small sleep to avoid busy-wait
         }
@@ -102,28 +104,29 @@ void XboxController::startEventThread(const bool blocking)
 std::optional<XboxEvent> XboxController::getNextEvent()
 {
     std::lock_guard<std::mutex> lg(mEventLocker);
-    if (mEventQueue.empty() == false) {
-        std::optional<XboxEvent> ret = mEventQueue.front();
-        mEventQueue.pop_front();
-        return ret;
-    }
-    return std::nullopt;
+    if (mEventQueue.empty())
+        return std::nullopt;
+
+    XboxEvent ret = mEventQueue.front();
+    mEventQueue.pop_front();
+    return std::optional<XboxEvent>(ret);
 }
 
-int __attribute__((weak))  main(int argc, char** argv) {
-
-    if (argc > 1) {
-        XboxController xbox(argv[1]);
-        xbox.startEventThread();
-        while(true) {
-            auto ret = xbox.getNextEvent();
-            if (ret) {
-                fprintf(stderr, "Event: %d\n", ret.value().type);
-            }
-            usleep(1000);
-        }
-    } else {
+int __attribute__((weak))  main(int argc, char** argv)
+{
+    if (argc < 2) {
         std::cerr << "Need device path" << std::endl;
+        return 1;
     }
+    XboxController xbox(argv[1]);
+    xbox.startEventThread();
+    while(true) {
+        auto ret = xbox.getNextEvent();
+        if (ret) {
+            fprintf(stderr, "Event: %d\n", ret.value().type);
+        }
+        usleep(1000);
+    }
+
     return 0;
 }
