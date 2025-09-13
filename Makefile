@@ -6,10 +6,10 @@ CC := g++
 
 default: stepper dual_stepper xbox
 
-stepper: bgt_tcm2209.cpp bgt_tcm2209.h main.cpp
-	$(CC) $(CFLAGS) bgt_tcm2209.cpp main.cpp -o stepper $(LDFLAGS)
+stepper: bgt_tmc2209.cpp bgt_tmc2209.h main.cpp
+	$(CC) $(CFLAGS) bgt_tmc2209.cpp main.cpp -o stepper $(LDFLAGS)
 
-dual_stepper: StepperController.cpp bgt_tcm2209.cpp
+dual_stepper: StepperController.cpp bgt_tmc2209.cpp main.cpp
 	$(CC) $(CFLAGS)  $^ -o $@ $(LDFLAGS)
 
 libgpiod.so: libgpiod_stub.c

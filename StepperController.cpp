@@ -1,5 +1,5 @@
 #include "StepperController.h"
-#include "bgt_tcm2209.h" // TODO could be different driver "backends"
+#include "bgt_tmc2209.h" // TODO could be different driver "backends"
 #include <algorithm> // clamp
 
 using namespace std::chrono_literals;
@@ -7,9 +7,9 @@ using namespace std::chrono_literals;
 StepperController::StepperController(int stepper_n):
     nStepper(stepper_n)
 {
-    mControllerHandle = (struct tcm2209_handle*)::malloc(sizeof(struct tcm2209_handle));
+    mControllerHandle = (struct tmc2209_handle*)::malloc(sizeof(struct tmc2209_handle));
     mControllerHandle->nStep = stepper_n; // TODO map to correct impl
-    int rc = tcm2209_init(mControllerHandle);
+    int rc = tmc2209_init(mControllerHandle);
     if (rc != 0) {
         std::fprintf(stderr, "Failed to init tcm controller\n");
         return; // TODO throw.
@@ -57,15 +57,15 @@ void StepperController::step(double speed, bool direction)
     // * Add limit switches before issuing command.
     // * Perhaps run PID here as well.
     // DO Step.
-    tcm2209_enable(mControllerHandle, true);
-    tcm2209_setdir(mControllerHandle, direction);
-    tcm2209_angle_step(mControllerHandle, 360, speed);
-    tcm2209_enable(mControllerHandle, false);
+    tmc2209_enable(mControllerHandle, true);
+    tmc2209_setdir(mControllerHandle, direction);
+    tmc2209_angle_step(mControllerHandle, 360, speed);
+    tmc2209_enable(mControllerHandle, false);
 }
 
 double StepperController::safeSpeed(double d)
 {
-    return std::clamp(0.0, TCM2209_MAX_SPEED, d);
+    return std::clamp(0.0, TMC2209_MAX_SPEED, d);
 }
 
 

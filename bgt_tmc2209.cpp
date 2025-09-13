@@ -1,14 +1,14 @@
-#include "bgt_tcm2209.h"
+#include "bgt_tmc2209.h"
 #include <gpiod.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h> // sleep
 
 // TCM PINOUTS, platform specific.
-#define TCM2209_CHIP_NAME "/dev/gpiochip0"
-#define TCM2209_PIN_EN 4
-#define TCM2209_PIN_DIR 27
-#define TCM2209_PIN_STEP 17
+#define tmc2209_CHIP_NAME "/dev/gpiochip0"
+#define tmc2209_PIN_EN 4
+#define tmc2209_PIN_DIR 27
+#define tmc2209_PIN_STEP 17
 
 static const int MICROSTEP_SETTING = 8; //8x microsteps.
 
@@ -26,16 +26,16 @@ struct pins {
 
 struct pins get_stepper_pinout(int nStepper) {
     if (nStepper == 0) {
-        return {TCM2209_PIN_EN, TCM2209_PIN_DIR,TCM2209_PIN_STEP };
+        return {tmc2209_PIN_EN, tmc2209_PIN_DIR,tmc2209_PIN_STEP };
     } else {
         //TODO
-        return {TCM2209_PIN_EN, TCM2209_PIN_DIR,TCM2209_PIN_STEP };
+        return {tmc2209_PIN_EN, tmc2209_PIN_DIR,tmc2209_PIN_STEP };
     }
 }
 
-int tcm2209_init(struct tcm2209_handle* handle)
+int tmc2209_init(struct tmc2209_handle* handle)
 {
-    const char* chipname = TCM2209_CHIP_NAME;
+    const char* chipname = tmc2209_CHIP_NAME;
     // TODO get other pinout.
     struct pins pins = get_stepper_pinout(handle->nStep);
     int rc = 0;
@@ -52,7 +52,7 @@ int tcm2209_init(struct tcm2209_handle* handle)
     }
 
     // active low.
-    if ((rc = gpiod_line_request_output(handle->pins.enb, "tcm2209-enb", 1))) {
+    if ((rc = gpiod_line_request_output(handle->pins.enb, "tmc2209-enb", 1))) {
         fprintf(stderr, "Failed to set output 1, rc:%d", rc);
         return 1;
     }
@@ -63,7 +63,7 @@ int tcm2209_init(struct tcm2209_handle* handle)
         return 1;
     }
 
-    if (gpiod_line_request_output(handle->pins.dir, "tcm2209-dir", 0)) {
+    if (gpiod_line_request_output(handle->pins.dir, "tmc2209-dir", 0)) {
         fprintf(stderr,"Failed to set dir 0");
         return 1;
     }
@@ -74,7 +74,7 @@ int tcm2209_init(struct tcm2209_handle* handle)
         return 1;
     }
 
-    if (gpiod_line_request_output(handle->pins.step, "tcm2209-step", 0)) {
+    if (gpiod_line_request_output(handle->pins.step, "tmc2209-step", 0)) {
         fprintf(stderr, "Failed to set step 0");
         return 0;
     }
@@ -82,7 +82,7 @@ int tcm2209_init(struct tcm2209_handle* handle)
     return 0;
 }
 
-void tcm2209_teardown(struct tcm2209_handle* handle)
+void tmc2209_teardown(struct tmc2209_handle* handle)
 {
     gpiod_line_release(handle->pins.step);
     gpiod_line_release(handle->pins.dir);
@@ -90,7 +90,7 @@ void tcm2209_teardown(struct tcm2209_handle* handle)
     gpiod_chip_close(handle->pins.chip);
 }
 
-void tcm2209_enable(struct tcm2209_handle* handle, bool on)
+void tmc2209_enable(struct tmc2209_handle* handle, bool on)
 {
     if (on) {
         gpiod_line_set_value(handle->pins.enb, 0);
@@ -99,7 +99,7 @@ void tcm2209_enable(struct tcm2209_handle* handle, bool on)
     }
 }
 
-void tcm2209_setdir(struct tcm2209_handle* handle, bool direction)
+void tmc2209_setdir(struct tmc2209_handle* handle, bool direction)
 {
     if (!direction) {
         // Counter
@@ -122,7 +122,7 @@ static const inline unsigned speed2udelay(float rps)
 }
 
 // rps: revolutions per second.
-void tcm2209_step(struct tcm2209_handle* handle, int nstep, float rps)
+void tmc2209_step(struct tmc2209_handle* handle, int nstep, float rps)
 {
     unsigned int usec_per_step = speed2udelay(rps); // RPS:1.0, nstep:~360deg => steps(360) /s.
 
@@ -134,10 +134,10 @@ void tcm2209_step(struct tcm2209_handle* handle, int nstep, float rps)
     }
 }
 
-void tcm2209_angle_step(struct tcm2209_handle* handle, double degrees, float speed)
+void tmc2209_angle_step(struct tmc2209_handle* handle, double degrees, float speed)
 {
     double num_steps = (degrees / (double)DEGREE_PER_STEP);
     printf("To get %lf degrees, need : %lf steps\n", degrees, num_steps);
-    tcm2209_step(handle, num_steps, speed);
+    tmc2209_step(handle, num_steps, speed);
 }
 

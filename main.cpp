@@ -1,4 +1,4 @@
-#include "bgt_tcm2209.h"
+#include "bgt_tmc2209.h"
 #include <stdio.h>
 #include <string.h> // strlen
 #include <stdlib.h> // strtod
@@ -33,8 +33,8 @@ Args parse_args(int argc, char **argv) {
                 continue;
             } else if (strncmp(arg, "--speed", strlen("--speed")) == 0) {
                 args.speed = strtod(argv[i+1], NULL);
-                if (args.speed > TCM2209_MAX_SPEED) {
-                    args.speed = TCM2209_MAX_SPEED;
+                if (args.speed > TMC2209_MAX_SPEED) {
+                    args.speed = TMC2209_MAX_SPEED;
                 }
                 continue;
             }
@@ -60,9 +60,9 @@ bool process_control_key() {
     return c == 'C';
 }
 
-void run(Args args, struct tcm2209_handle* handle)
+void run(Args args, struct tmc2209_handle* handle)
 {
-    tcm2209_enable(handle, true);
+    tmc2209_enable(handle, true);
     if (args.interactive) {
         while(1) {
             char c = getchar();
@@ -70,43 +70,43 @@ void run(Args args, struct tcm2209_handle* handle)
                 continue;
             if (c == '\033') {
                 bool dir = process_control_key();
-                tcm2209_setdir(handle, dir);
-                tcm2209_angle_step(handle, 360, 1);
+                tmc2209_setdir(handle, dir);
+                tmc2209_angle_step(handle, 360, 1);
             } else {
                 printf("Unrecoginized control key %d\n", (int)c);
                 continue;
             }
         }
     } else if (args.continuous) {
-        tcm2209_setdir(handle, args.direction);
+        tmc2209_setdir(handle, args.direction);
         while(1) {
-            tcm2209_angle_step(handle, 360, args.speed);
+            tmc2209_angle_step(handle, 360, args.speed);
         }
     } else {
-        tcm2209_setdir(handle, args.direction);
+        tmc2209_setdir(handle, args.direction);
         if (args.angle_step != 0)
-            tcm2209_angle_step(handle, args.angle_step, args.speed);
+            tmc2209_angle_step(handle, args.angle_step, args.speed);
         else if (args.num_steps != 0)
-            tcm2209_step(handle, args.num_steps, args.speed);
+            tmc2209_step(handle, args.num_steps, args.speed);
 
     } 
-     tcm2209_enable(handle, false);
+     tmc2209_enable(handle, false);
 }
 
 
 int main(int argc, char ** argv)
 {
     int rc;
-    struct tcm2209_handle* handle = (struct tcm2209_handle*)
-        ::malloc(sizeof (struct tcm2209_handle));
+    struct tmc2209_handle* handle = (struct tmc2209_handle*)
+        ::malloc(sizeof (struct tmc2209_handle));
 
-    rc = tcm2209_init(handle);
+    rc = tmc2209_init(handle);
     if (rc) {
         fprintf(stderr, "Failed to init\n");
         return -1;
     }
 
     run(parse_args(argc, argv), handle);
-    tcm2209_teardown(handle);
+    tmc2209_teardown(handle);
     return 0;
 }

@@ -5,8 +5,6 @@
 #include <atomic>
 #include <thread>
 
-constexpr bool CCW = true;
-constexpr bool CW = false;
 
 // Super dumb command.
 struct StepperCommand {
@@ -28,7 +26,7 @@ private:
     double safeSpeed(double in); // TODO add in mechanical configuration
 
 private:
-     struct tcm2209_handle* mControllerHandle;
+     struct tmc2209_handle* mControllerHandle;
     int nStepper;
     std::thread mWorkerThread;
     std::atomic<bool> mRunning{true};

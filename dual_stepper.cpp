@@ -1,8 +1,7 @@
-
-
 #include "StepperController.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     StepperController xAxis(0);
     // StepperThread yAxisThread(1);
 
