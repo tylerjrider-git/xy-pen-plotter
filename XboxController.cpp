@@ -64,7 +64,7 @@ void XboxController::startEventThread(const bool blocking)
         while (mRunning) {
             int rc = ::libevdev_next_event(mDevice, flags, &ev);
             if (rc == 0) {
-                if (0) { printEvent(ev); }
+                if (0) {printEvent(ev);}
                 std::lock_guard<std::mutex> lg(mEventLocker);
                 switch(ev.type) {
                     case EV_KEY:

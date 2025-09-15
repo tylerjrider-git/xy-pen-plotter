@@ -40,8 +40,10 @@ __attribute__((weak)) int libevdev_next_event(libevdev*, int, input_event*) { re
 enum class XboxButton {
     A = BTN_SOUTH,
     B = BTN_EAST,
-    X = BTN_WEST,
-    Y = BTN_NORTH
+    X = BTN_NORTH,
+    Y = BTN_WEST,
+    START = BTN_START,
+    SELECT = BTN_SELECT
 };
 
 struct XboxEvent {
