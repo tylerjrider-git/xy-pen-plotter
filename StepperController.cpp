@@ -123,11 +123,11 @@ void StepperController::handleCommand(struct StepperCommand& cmd)
         step(cmd.velocity, tmc2209_degrees_to_steps(360));
     } else if (cmd.type == StepperCommandType::RelativePosition) {
         float steps = mm2steps(cmd.position);
-        float velocity = steps < 0 ? -DEFAULT_VELOCITY : DEFAULT_VELOCITY;
+        float velocity = steps < 0 ? -cmd.velocity : cmd.velocity;
         step(velocity, std::abs(steps));
     } else if (cmd.type == StepperCommandType::AbsolutePosition) {
         float deltaSteps = mm2steps(cmd.position - mCurrentPosition);
-        float velocity = deltaSteps < 0 ? -DEFAULT_VELOCITY : DEFAULT_VELOCITY;
+        float velocity = deltaSteps < 0 ? -cmd.velocity : cmd.velocity;
         step(velocity, std::abs(deltaSteps));
     } else {
         fprintf(stderr, "Unhandled Command\n");
@@ -199,4 +199,3 @@ void StepperController::resetOrigin()
     mStepperCount = 0;
     mCurrentPosition = 0;
 }
-
