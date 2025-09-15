@@ -24,9 +24,10 @@ void tmc2209_enable(struct tmc2209_handle* handle, bool on);
 
 void tmc2209_setdir(struct tmc2209_handle* handle, bool direction);
 
-void tmc2209_step(struct tmc2209_handle* handle, int nstep, float rps);
+int tmc2209_step(struct tmc2209_handle* handle, int nstep, float rps);
 
-void tmc2209_angle_step(struct tmc2209_handle* handle, double degrees, float speed);
+int tmc2209_angle_step(struct tmc2209_handle* handle, double degrees, float speed);
 
+double tmc2209_degrees_to_steps(double degrees);
 
 #endif

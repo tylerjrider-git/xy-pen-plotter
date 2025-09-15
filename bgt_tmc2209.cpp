@@ -4,18 +4,25 @@
 #include <string.h>
 #include <unistd.h> // sleep
 
-
-
-static const float PI = 3.14159;
-static const int STEPS_PER_DEGREE = 256;
-static const int MICROSTEP_SETTING = 8; //8x microsteps.
-
+#define DEGREE_PER_STEP ((double) 1.8f / MICROSTEP_SETTING)
+#define STEPS_PER_REVOLUTION (360.f / DEGREE_PER_STEP)
+#define USEC_PER_SEC (1e6)
+#define MAX(A, B) ((A) > (B) ? A : B)
 
 // TCM PINOUTS, platform specific.
 #define TMC2209_CHIP_NAME "/dev/gpiochip0"
-#define TMC2209_PIN_EN 4
-#define TMC2209_PIN_DIR 27
-#define TMC2209_PIN_STEP 17
+
+#define STEPPER0_TMC2209_PIN_EN 4
+#define STEPPER0_TMC2209_PIN_DIR 27
+#define STEPPER0_TMC2209_PIN_STEP 17
+
+#define STEPPER1_TMC2209_PIN_EN 5
+#define STEPPER1_TMC2209_PIN_DIR 13
+#define STEPPER1_TMC2209_PIN_STEP 6
+
+
+static const float PI = 3.14159;
+static const int MICROSTEP_SETTING = 8; //8x microsteps.
 
 struct pins {
     int en;
@@ -24,11 +31,20 @@ struct pins {
 };
 
 struct pins get_stepper_pinout(int n) {
+    printf("returning %d pins\n", n);
     if (n == 0) {
-        return {TMC2209_PIN_EN, TMC2209_PIN_DIR,TMC2209_PIN_STEP };
+        return { 
+            STEPPER0_TMC2209_PIN_EN,
+            STEPPER0_TMC2209_PIN_DIR,
+            STEPPER0_TMC2209_PIN_STEP };
+    } else if (n == 1) {
+        return {
+            STEPPER1_TMC2209_PIN_EN,
+            STEPPER1_TMC2209_PIN_DIR,
+            STEPPER1_TMC2209_PIN_STEP };
     } else {
-        //TODO
-        return {TMC2209_PIN_EN, TMC2209_PIN_DIR,TMC2209_PIN_STEP };
+        fprintf(stderr, "Unknown stepper :%d\n", n);
+        exit(1);
     }
 }
 
@@ -62,8 +78,8 @@ int tmc2209_init(struct tmc2209_handle* handle, int n_stepper)
     struct pins pins = {0};
     int rc = 0;
 
-    pins = get_stepper_pinout(handle->nStep);
-
+    printf("Opening with stepper %d pins\n", n_stepper);
+    pins = get_stepper_pinout(n_stepper);
     handle->nStep = n_stepper;
     handle->pins.chip = gpiod_chip_open(chipname);
     if (!handle->pins.chip) {
@@ -136,11 +152,6 @@ void tmc2209_setdir(struct tmc2209_handle* handle, bool direction)
     }
 }
 
-#define DEGREE_PER_STEP ((double) 1.8f / MICROSTEP_SETTING)
-#define STEPS_PER_REVOLUTION (360.f / DEGREE_PER_STEP)
-#define USEC_PER_SEC (1e6)
-#define MAX(A, B) ((A) > (B) ? A : B)
-
 static const inline unsigned speed2udelay(float rps)
 {
     unsigned int usec_per_step = USEC_PER_SEC / (rps * STEPS_PER_REVOLUTION);
@@ -148,22 +159,29 @@ static const inline unsigned speed2udelay(float rps)
 }
 
 // rps: revolutions per second.
-void tmc2209_step(struct tmc2209_handle* handle, int nstep, float rps)
+int tmc2209_step(struct tmc2209_handle* handle, const int nstep, float rps)
 {
     unsigned int usec_per_step = speed2udelay(rps); // RPS:1.0, nstep:~360deg => steps(360) /s.
 
-    while (nstep-- > 0) {
+    int step_left = nstep;
+    while (step_left-- > 0) {
        gpiod_line_set_value(handle->pins.step, 1);
        usleep(usec_per_step /2); 
        gpiod_line_set_value(handle->pins.step, 0);
        usleep(usec_per_step/2);
     }
+    return nstep;
 }
 
-void tmc2209_angle_step(struct tmc2209_handle* handle, double degrees, float speed)
+double tmc2209_degrees_to_steps(double degrees)
 {
-    double num_steps = (degrees / (double)DEGREE_PER_STEP);
-    printf("To get %lf degrees, need : %lf steps\n", degrees, num_steps);
-    tmc2209_step(handle, num_steps, speed);
+    return (degrees / (double)DEGREE_PER_STEP);
+}
+
+int tmc2209_angle_step(struct tmc2209_handle* handle, double degrees, float speed)
+{
+    double num_steps = tmc2209_degrees_to_steps(degrees);
+    // printf("To get %lf degrees, need : %lf steps\n", degrees, num_steps);
+    return tmc2209_step(handle, num_steps, speed);
 }
 
