@@ -159,7 +159,7 @@ static const inline unsigned speed2udelay(float rps)
 }
 
 // rps: revolutions per second.
-int tmc2209_step(struct tmc2209_handle* handle, const int nstep, float rps)
+int tmc2209_step(struct tmc2209_handle* handle, unsigned int nstep, float rps)
 {
     unsigned int usec_per_step = speed2udelay(rps); // RPS:1.0, nstep:~360deg => steps(360) /s.
 
