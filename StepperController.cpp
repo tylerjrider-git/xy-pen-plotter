@@ -29,7 +29,6 @@ static inline float mm2steps(float mm)
 
 StepperController::StepperController(int stepper_n, int maxRange, StepperFlags flags):
     mStepperId(stepper_n),
-    mStepperCount(0),
     mCurrentPosition(0),
     mMaxRange(maxRange),
     mStepperFlags(flags),
@@ -51,25 +50,19 @@ StepperController::StepperController(int stepper_n, int maxRange, StepperFlags f
 
     mWorkerThread = std::thread([this]() -> void {
         while (mRunning) {
-            {
-                std::unique_lock<std::mutex> lock(mCommandQueueMutex);
-                if (mCommandQueue.empty() == false) {
-                    struct StepperCommand cmd = mCommandQueue.front();
-                    mCommandQueue.pop_front();
-                    lock.unlock();
-                    handleCommand(cmd);
-                    mTargetVelocity.store(0); // Disables target mode.
-                } else if (std::abs(mTargetVelocity) > TMC2209_MIN_SPEED) {
-                    handleTargetCommand();
-                    continue;
-                }
-            }
-            // std::this_thread::sleep_for(100ms);
-            {
-                std::unique_lock<std::mutex> lock(mCommandQueueMutex);
-                mCommandCv.wait(lock, [&]() -> bool {
-                    return !mCommandQueue.empty() || std::abs(mTargetVelocity) > TMC2209_MIN_SPEED;
-                });
+            std::unique_lock<std::mutex> lock(mCommandQueueMutex);
+            mCommandCv.wait(lock, [&]() -> bool {
+                return !mCommandQueue.empty() || std::abs(mTargetVelocity.load()) > TMC2209_MIN_SPEED;
+            });
+
+            if (mCommandQueue.empty() == false) {
+                struct StepperCommand cmd = mCommandQueue.front();
+                mCommandQueue.pop_front();
+                lock.unlock();
+                handleCommand(cmd);
+                mTargetVelocity.store(0); // Disables target mode.
+            } else if (std::abs(mTargetVelocity.load()) > TMC2209_MIN_SPEED) {
+                handleTargetCommand();
             }
         }
     });
@@ -94,11 +87,34 @@ void StepperController::sendCommand(struct StepperCommand cmd)
     mCommandCv.notify_all();
 }
 
+void StepperController::waitCommand()
+{
+    while (mCommandQueue.empty() == false) {
+        std::this_thread::sleep_for(10ms);
+    }
+}
+
 void StepperController::setTargetVelocity(float velocity)
 {
     mlastUpdateTp = std::chrono::steady_clock::now();
     mTargetVelocity.store(velocity);
     mCommandCv.notify_all();
+}
+
+void StepperController::handleTargetCommand()
+{
+    // This is just a safety backstop to prevent the analog stick getting
+    // stuck.
+    if (timeSinceLastCommand() < MAX_TARGET_DURATION_MS) {
+        bool dir = mTargetVelocity.load() > 0;
+        int steps = tmc2209_degrees_to_steps(1);
+        steps = dir ? steps : -steps;
+        step(std::abs(mTargetVelocity.load()), steps);
+    } else {
+        std::cout << "Stopping autotarget" << std::endl;
+        mTargetVelocity.store(0);
+        mCommandCv.notify_all();
+    }
 }
 
 unsigned long StepperController::timeSinceLastCommand() const
@@ -107,60 +123,60 @@ unsigned long StepperController::timeSinceLastCommand() const
         std::chrono::steady_clock::now() - mlastUpdateTp).count();
 }
 
-void StepperController::handleTargetCommand()
+void StepperController::handleCommand(struct StepperCommand &cmd)
 {
-    if (timeSinceLastCommand() < MAX_TARGET_DURATION_MS) {
-        step(mTargetVelocity, tmc2209_degrees_to_steps(1.8));
-    } else {
-        std::cout << "Stopping autotarget" << std::endl;
-        mTargetVelocity.store(0);
+    switch (cmd.type) {
+    case StepperCommandType::Velocity:
+    {   bool dir =  cmd.velocity >= 0;
+        int steps = tmc2209_degrees_to_steps(360);
+        steps = dir ? steps : -steps;
+        step(std::abs(cmd.velocity), steps);
+        break;
+    }
+    case StepperCommandType::RelativePosition:
+    {
+        const float steps = mm2steps(cmd.position);
+        step(std::abs(cmd.velocity), steps);
+        break;
+    }
+
+    case StepperCommandType::AbsolutePosition:
+    {
+        const float deltaSteps = mm2steps(cmd.position - mCurrentPosition);
+        step(std::abs(cmd.velocity), deltaSteps);
+        break;
+    }
+
+    default:
+        fprintf(stderr, "Unhandled Command: %d\n", cmd.type);
+        break;
     }
 }
 
-void StepperController::handleCommand(struct StepperCommand& cmd)
-{
-    if (cmd.type == StepperCommandType::Velocity) {
-        step(cmd.velocity, tmc2209_degrees_to_steps(360));
-    } else if (cmd.type == StepperCommandType::RelativePosition) {
-        float steps = mm2steps(cmd.position);
-        float velocity = steps < 0 ? -cmd.velocity : cmd.velocity;
-        step(velocity, std::abs(steps));
-    } else if (cmd.type == StepperCommandType::AbsolutePosition) {
-        float deltaSteps = mm2steps(cmd.position - mCurrentPosition);
-        float velocity = deltaSteps < 0 ? -cmd.velocity : cmd.velocity;
-        step(velocity, std::abs(deltaSteps));
-    } else {
-        fprintf(stderr, "Unhandled Command\n");
-    }
-}
-
-double StepperController::safeSpeed(double d)
+double StepperController::safeSpeed(double d) const
 {
     return std::clamp(-TMC2209_MAX_SPEED, TMC2209_MAX_SPEED, d);
 }
 
-bool StepperController::stepValid(int steps, bool direction) const
+bool StepperController::stepValid(float mm) const
 {
-    if (direction) {
-        return (mStepperCount + steps) < mMaxRange;
-    } else {
-        return mStepperCount - steps > -mMaxRange;
-    }
+    return (mCurrentPosition + mm < mMaxRange) && (mCurrentPosition - mm > -mMaxRange);
 }
 
-void StepperController::step(double velocity, unsigned int steps)
+void StepperController::step(double speed, int steps)
 {
-    const bool direction = velocity > 0;
-
+    const bool direction = steps > 0;
     // clamp velocity
-    velocity = safeSpeed(velocity);
+    speed = safeSpeed(speed);
 
+    // printf("step speed=%lf, steps=%d, mm=%f\n", speed, steps, steps2mm(steps));
     // Soft checks
-    if (stepValid(steps, direction) == false) {
-         fprintf(stderr, "Command of %d steps would exceed range %d > %d\n",
-            steps, std::abs(mStepperCount)+steps, mMaxRange);
+    if (stepValid(steps2mm(steps)) == false) {
+         fprintf(stderr, "Command of %d steps would exceed range %lf > %d\n",
+            steps, mCurrentPosition + steps2mm(steps), mMaxRange);
         return;
     }
+
 
     // if LIMIT SWITCH == false
     // TODO
@@ -168,15 +184,9 @@ void StepperController::step(double velocity, unsigned int steps)
     // * Perhaps run PID here as well.
     tmc2209_enable(mControllerHandle, true);
     tmc2209_setdir(mControllerHandle, direction);
-    tmc2209_step(mControllerHandle, steps, std::abs(velocity));
+    tmc2209_step(mControllerHandle, std::abs(steps), speed);
 
-    if (direction) {
-        mStepperCount += steps;
-        mCurrentPosition += steps2mm(steps);
-    } else {
-        mStepperCount -= steps;
-        mCurrentPosition -= steps2mm(steps);
-    }
+    mCurrentPosition += steps2mm(steps);
 
     // De-energizing the stepper when in microstepper mode can result
     // into motor sliding into full step.
@@ -184,10 +194,6 @@ void StepperController::step(double velocity, unsigned int steps)
         tmc2209_enable(mControllerHandle, false);
 }
 
-int StepperController::stepperCount() const
-{
-    return mStepperCount;
-}
 
 float StepperController::currentPosition() const
 {
@@ -196,6 +202,5 @@ float StepperController::currentPosition() const
 
 void StepperController::resetOrigin()
 {
-    mStepperCount = 0;
     mCurrentPosition = 0;
 }

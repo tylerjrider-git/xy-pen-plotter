@@ -30,20 +30,20 @@ public:
     virtual ~StepperController();
 
     void sendCommand(struct StepperCommand cmd);
+    void waitCommand();
     void setTargetVelocity(float velocity);
-    void resetOrigin();
 
-    int stepperCount() const;
+    void resetOrigin();
     float currentPosition() const;
 
 private:
-    void step(double velocity, unsigned int steps);
-    bool stepValid(int step, bool direction) const;
+    bool stepValid(float mm) const;
+    double safeSpeed(double in) const;
+    unsigned long timeSinceLastCommand() const;
 
     void handleCommand(struct StepperCommand& cmd);
     void handleTargetCommand();
-    double safeSpeed(double in); // TODO add in mechanical configuration
-    unsigned long timeSinceLastCommand() const;
+    void step(double speed, int steps);
 
 private:
     // HW Specific
