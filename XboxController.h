@@ -43,7 +43,9 @@ enum class XboxButton {
     X = BTN_NORTH,
     Y = BTN_WEST,
     START = BTN_START,
-    SELECT = BTN_SELECT
+    SELECT = BTN_SELECT,
+    LBUMPER = BTN_TL,
+    RBUMPER = BTN_TR,
 };
 
 struct XboxEvent {

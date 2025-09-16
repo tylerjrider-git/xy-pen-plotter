@@ -1,25 +1,20 @@
 #pragma once
 #include "StepperController.h"
+#include "XYPenPlotter.h"
 #include <chrono>
 #include <vector>
 #include <cmath>
 
-using Coordinate = std::pair<float,float>;
 using namespace std::chrono_literals;
 
-static void testOriginReset(StepperController& xAxis, StepperController& yAxis)
+static void testOriginReset(XYPenPlotter& plotter)
 {
-    xAxis.sendCommand({StepperCommandType::AbsolutePosition, 1.0, -10});
-    yAxis.sendCommand({StepperCommandType::AbsolutePosition, 1.0, -10});
-
-    xAxis.sendCommand({StepperCommandType::RelativePosition, 1.0, 15});
-    yAxis.sendCommand({StepperCommandType::RelativePosition, 1.0, 15});
-
-    xAxis.sendCommand({StepperCommandType::AbsolutePosition, 1.0, 0});
-    yAxis.sendCommand({StepperCommandType::AbsolutePosition, 1.0, 0});
+    plotter.moveAbsolute({-10.0, -10.0});
+    plotter.moveRelative({15.0, 15.0});
+    plotter.moveAbsolute({0.0, 0.0});
 }
 
-static void testCoordinates(StepperController& xAxis, StepperController& yAxis)
+static void testCoordinates(XYPenPlotter& plotter)
 {
     std::vector<Coordinate> coordinates = {
             {-5, 0},
@@ -33,17 +28,16 @@ static void testCoordinates(StepperController& xAxis, StepperController& yAxis)
             {-5, 0}
     };
     for (auto coordinate : coordinates) {
-        float x = coordinate.first;
-        float y = coordinate.second;
-        xAxis.sendCommand({StepperCommandType::RelativePosition, 5.0, x});
-        yAxis.sendCommand({StepperCommandType::RelativePosition, 5.0, y});
-        std::this_thread::sleep_for(100ms);
+        plotter.moveRelative(coordinate, 0.5);
+        std::this_thread::sleep_for(1000ms);
     }
 }
 
 
-static void testArcs(StepperController& xAxis, StepperController& yAxis)
+static void testArcs(XYPenPlotter& plotter)
 {
+    StepperController& xAxis = plotter.m_xAxis;
+    StepperController& yAxis = plotter.m_yAxis;
     for (float t = 0; t < 3; ) {
         xAxis.setTargetVelocity(sin(2*3.14159*t));
         yAxis.setTargetVelocity(cos(2*3.14159*t));
@@ -52,4 +46,35 @@ static void testArcs(StepperController& xAxis, StepperController& yAxis)
     }
     yAxis.setTargetVelocity(0);
     xAxis.setTargetVelocity(0);
+}
+
+static void testCircles(XYPenPlotter& plotter)
+{
+    plotter.drawArc({0,0}, 10.0, 0, 180, true);
+}
+
+static void testSymbol(XYPenPlotter& plotter)
+{
+    std::vector<Coordinate> coordinates = {
+        {0, 10},
+        {-10, 10},
+        {0 , 10},
+        {10, 10},
+        {10, -10}, // top
+        {0, -10},
+        {-5, -5},
+        {-5, 5},
+        {0, 10}, // top line
+        {0, -10}, // top line
+        {10, -10},
+        {0, -10},
+        {-10, -10},
+        {-10, 10},
+        {0, 10},
+        {5, 5},
+    };
+    for (auto coordinate : coordinates) {
+        plotter.moveRelative({coordinate.y, coordinate.x}, 0.5);
+        std::this_thread::sleep_for(1000ms);
+    }
 }

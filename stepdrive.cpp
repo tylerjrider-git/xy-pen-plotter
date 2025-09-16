@@ -1,20 +1,28 @@
 #include "StepperController.h"
 #include "XboxController.h"
+#include "XYPenPlotter.h"
+#include "StepperTests.h"
+
+#include <math.h>
 #include <unistd.h>
 #include <algorithm>
+#include <vector>
+#include <tuple>
+
+using namespace std::chrono_literals;
 
 // MIN = -23148
-const int X_AXIS_MIN = INT16_MIN;
-const int X_AXIS_MAX = INT16_MAX;
-const float MAX_SPEED = 5.0;
+static constexpr int X_AXIS_MIN = INT16_MIN;
+static constexpr int X_AXIS_MAX = INT16_MAX;
+static constexpr float MAX_SPEED = 5.0;
 
-static inline float axis2speed(int axis)
+static inline float axis2velocity(int axis)
 {
     axis = std::clamp(axis, X_AXIS_MIN, X_AXIS_MAX);
-    return MAX_SPEED * ((float)std::abs(axis) / (float)X_AXIS_MAX);
+    return MAX_SPEED * ((float)axis / (float)X_AXIS_MAX);
 }
 
-void handleEvent(const XboxEvent &ev, StepperController &controller)
+static void handleEvent(XYPenPlotter& plotter, const XboxEvent &ev)
 {
     switch (ev.type)
     {
@@ -23,39 +31,53 @@ void handleEvent(const XboxEvent &ev, StepperController &controller)
         switch (ev.button)
         {
         case XboxButton::A:
-            controller.sendCommand({0.5, 1.0, true});
-            break;
-        case XboxButton::B:
-            controller.sendCommand({0.5, 1.0, false});
-            break;
-        case XboxButton::X:
-            controller.sendCommand({2.0, 1.0, true});
+            plotter.m_xAxis.sendCommand({StepperCommandType::Velocity, 2.0});
             break;
         case XboxButton::Y:
-            controller.sendCommand({2.0, 1.0, false});
+            plotter.m_xAxis.sendCommand({StepperCommandType::Velocity, -2.0});
+            break;
+        case XboxButton::X:
+            plotter.m_yAxis.sendCommand({StepperCommandType::Velocity, -2.0});
+            break;
+        case XboxButton::B:
+            plotter.m_yAxis.sendCommand({StepperCommandType::Velocity, 2.0});
+            break;
+        case XboxButton::START:
+            plotter.m_xAxis.sendCommand({StepperCommandType::AbsolutePosition, 4.0, 0.0});
+            plotter.m_yAxis.sendCommand({StepperCommandType::AbsolutePosition, 4.0, 0.0});
+            break;
+        case XboxButton::SELECT:
+            plotter.m_xAxis.resetOrigin();
+            plotter.m_yAxis.resetOrigin();
+            break;
+        case XboxButton::LBUMPER:
+            plotter.drawArc(plotter.currentPosition(), 10,0,360, true);
             break;
         default:
-            std::fprintf(stderr, "Unknown button %d\n", ev.button);
+            std::fprintf(stderr, "Unknown button %d, exitting\n", (int)ev.button);
+            exit(1);
             break;
         }
     }
     break;
     case XboxEvent::LeftAxis:
     {
-        float speed = axis2speed(ev.xpos);
-        bool dir = ev.xpos > 0;
-        std::fprintf(stderr, "LAxis, val = (%lf, %lf)", ev.xpos, ev.ypos);
-        std::fprintf(stderr, "Speed: %lf, dir: %s\n", speed, dir ? "CW" : "CCW");
-        controller.setTarget(speed, dir);
+        float x_v = axis2velocity(ev.ypos);
+        float y_v = axis2velocity(ev.xpos);
+        // std::fprintf(stderr, "LAxis, val = (%lf, %lf)", ev.xpos, ev.ypos);
+        // std::fprintf(stderr, "Speed: %lf\n", velocity);
+        plotter.m_xAxis.setTargetVelocity(x_v);
+        plotter.m_yAxis.setTargetVelocity(y_v);
         break;
     }
     case XboxEvent::RightAxis:
     {
-        float speed = axis2speed(ev.xpos) / 10.0;
-        bool dir = ev.xpos > 0;
-        std::fprintf(stderr, "RAxis, val = (%lf, %lf)", ev.xpos, ev.ypos);
-        std::fprintf(stderr, "Speed: %lf, dir: %s\n", speed, dir ? "CW" : "CCW");
-        controller.setTarget(speed, dir);
+        float x_v = axis2velocity(ev.ypos) / 3.0;
+        float y_v = axis2velocity(ev.xpos) / 3.0;
+        // std::fprintf(stderr, "LAxis, val = (%lf, %lf)", ev.xpos, ev.ypos);
+        // std::fprintf(stderr, "Speed: %lf\n", velocity);
+        plotter.m_xAxis.setTargetVelocity(x_v);
+        plotter.m_yAxis.setTargetVelocity(y_v);
         break;
     }
     default:
@@ -65,21 +87,45 @@ void handleEvent(const XboxEvent &ev, StepperController &controller)
     return;
 }
 
-int main(int argc, char **argv)
+static void controllerLoop(XYPenPlotter& plotter)
 {
-    StepperController xAxis(0);
     // TODO args
     XboxController controller("/dev/input/event5");
     controller.startEventThread();
-
-    while (1)
-    {
+    static int tick = 0;
+    while (true) {
         std::optional<XboxEvent> ret = controller.getNextEvent();
         if (ret) {
-            handleEvent(ret.value(), xAxis);
+            handleEvent(plotter, ret.value());
+            // Keep draining event queue while its active(in the case of analog stick.)
+            continue;
         }
-        // todo -> select on evdev file descriptor
-        usleep(1000);
+        if ((tick++ % 1000) == 0) {
+            Coordinate pos = plotter.currentPosition();
+            printf("{%.02f,%.02f}\n", pos.x, pos.y);
+        }
+        std::this_thread::sleep_for(1ms);
     }
+}
+
+
+int main(int argc, char **argv)
+{
+    XYPenPlotter plotter;
+
+    if (argc > 1) {
+        if (std::string(argv[1]) == "Text") {
+            testCoordinates(plotter);
+        } else if (std::string(argv[1]) == "Origin") {
+            testOriginReset(plotter);
+        } else if (std::string(argv[1]) == "arcs") {
+            testArcs(plotter);
+        } else if (std::string(argv[1]) == "Circle") {
+            testCircles(plotter);
+        } else if (std::string(argv[1]) == "Symbol") {
+            testSymbol(plotter);
+        }
+    }
+    controllerLoop(plotter);
     return 0;
 }
