@@ -3,17 +3,16 @@
 #include "XYPenPlotter.h"
 #include "StepperTests.h"
 
-#include <math.h>
-#include <unistd.h>
+#include <cmath>
+#include <csignal>
 #include <algorithm>
 #include <vector>
 #include <tuple>
 
+#include <unistd.h>
 using namespace std::chrono_literals;
 
 // MIN = -23148
-static constexpr int X_AXIS_MIN = INT16_MIN;
-static constexpr int X_AXIS_MAX = INT16_MAX;
 static constexpr float MAX_SPEED = 5.0;
 
 static inline float axis2velocity(int axis)
@@ -87,13 +86,16 @@ static void handleEvent(XYPenPlotter& plotter, const XboxEvent &ev)
     return;
 }
 
-static void controllerLoop(XYPenPlotter& plotter)
+
+static volatile bool running = true;
+static void controllerLoop(XYPenPlotter& plotter, const std::string& controllerDevice)
 {
     // TODO args
-    XboxController controller("/dev/input/event5");
-    controller.startEventThread();
+    XboxController controller(controllerDevice);
     static int tick = 0;
-    while (true) {
+    controller.startEventThread();
+
+    while (running) {
         std::optional<XboxEvent> ret = controller.getNextEvent();
         if (ret) {
             handleEvent(plotter, ret.value());
@@ -108,10 +110,10 @@ static void controllerLoop(XYPenPlotter& plotter)
     }
 }
 
-
 int main(int argc, char **argv)
 {
     XYPenPlotter plotter;
+    std::string controllerDevice = "/dev/input/event5";
 
     if (argc > 1) {
         if (std::string(argv[1]) == "Text") {
@@ -124,8 +126,16 @@ int main(int argc, char **argv)
             testCircles(plotter);
         } else if (std::string(argv[1]) == "Symbol") {
             testSymbol(plotter);
+        } else if (std::string(argv[1]) == "SymbolRaw") {
+            testSymbolRaw(plotter);
         }
     }
-    controllerLoop(plotter);
+    if (argc > 2) {
+        if (std::string(argv[1]) == "--xbox") {
+            controllerDevice = std::string(argv[2]);
+            std::printf("Using %s for input device\n", controllerDevice.c_str());
+        }
+    }
+    controllerLoop(plotter, controllerDevice);
     return 0;
 }
