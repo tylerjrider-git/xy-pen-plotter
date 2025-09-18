@@ -36,6 +36,8 @@ __attribute__((weak)) void libevdev_free(libevdev*) {}
 __attribute__((weak)) int libevdev_next_event(libevdev*, int, input_event*) { return 0; }
 
 #endif
+static constexpr int X_AXIS_MIN = INT16_MIN;
+static constexpr int X_AXIS_MAX = INT16_MAX;
 
 enum class XboxButton {
     A = BTN_SOUTH,

@@ -50,10 +50,13 @@ static void testArcs(XYPenPlotter& plotter)
 
 static void testCircles(XYPenPlotter& plotter)
 {
-    plotter.drawArc({0,0}, 10.0, 0, 180, true);
+    // plotter.drawArc({0,0}, 10.0, 0, 180, true);
+
+
+    plotter.drawArc({0,0}, {0, 50}, 25, -1, true);
 }
 
-static void testSymbol(XYPenPlotter& plotter)
+static void testSymbolRaw(XYPenPlotter& plotter)
 {
     std::vector<Coordinate> coordinates = {
         {0, 10},
@@ -64,8 +67,8 @@ static void testSymbol(XYPenPlotter& plotter)
         {0, -10},
         {-5, -5},
         {-5, 5},
-        {0, 10}, // top line
-        {0, -10}, // top line
+        {0, 10}, // top middle vertical line
+        {0, -10},
         {10, -10},
         {0, -10},
         {-10, -10},
@@ -77,4 +80,33 @@ static void testSymbol(XYPenPlotter& plotter)
         plotter.moveRelative({coordinate.y, coordinate.x}, 0.5);
         std::this_thread::sleep_for(1000ms);
     }
+}
+static void testSymbol(XYPenPlotter& plotter)
+{
+    std::vector<Line> lines = {
+        {{0, 0},  {0, 10}},
+        {{0, 10}, {-10, 20}}, // {-10, 10} 
+        {{-10, 20}, {-10, 30}}, // {0 , 10}, 
+        {{-10, 30}, {0, 40}}, // {10, 10}, 
+        {{0, 40}, {10, 30}}, //  {10, -10} top 
+        {{10, 30}, {10, 20}}, //  {0, -10}, 
+
+        {{10, 20}, {5, 15}}, //  {-5, -5}, 
+        {{5, 15}, {0, 20}}, // {-5, 5}, 
+        {{0, 20}, {0, 30}}, // {0, 10} top middle vertical line  
+        {{0, 30}, {0, 20}}, // {0, -10} *
+
+        {{0, 20}, {10, 10}}, // {10, -10} 
+        {{10, 10}, {10, 0}}, //  {0, -10}, 
+        {{10, 0}, {0, -10}}, // {-10, -10}, 
+        {{0, -10}, {-10, 0}}, // {-10, 10},
+        {{-10, 0}, {-10,10}}, // {0, 10}
+        {{-10,10}, {-5, 15}} // {5,5}
+
+    };
+        for (auto line : lines) {
+            Line line_t = {{line.start.y, line.start.x}, {line.end.y, line.end.x}};
+            plotter.drawLine(line_t, 0.5);
+        }
+    // plotter.moveAbsolute({0,0});
 }
