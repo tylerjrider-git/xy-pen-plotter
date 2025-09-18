@@ -20,6 +20,9 @@ xbox_dummy: XboxController.cpp
 xbox: XboxController.cpp
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
+servo: ServoController.cpp XboxController.cpp
+	$(CC) $(CFLAGS) $^ -o servo $(LDFLAGS)
+
 .PHONY: clean
 clean:
 	rm -f libgpiod.so stepper stepdrive xbox dual-step
